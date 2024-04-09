@@ -100,6 +100,7 @@ begin {
     }
 
     $LogPath = "$env:SYSTEMROOT\TEMP\Deployment_" + (Get-Date -Format 'yyyy-MM-dd')
+    $pw = $pw.Replace('..', '&')
 }
 
 process {
