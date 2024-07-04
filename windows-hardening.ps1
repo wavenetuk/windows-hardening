@@ -3,13 +3,13 @@
     Windows Hardening Script
 #>
 
-Param (        
+Param (
     [Parameter(Mandatory = $true)]
-    [ValidateNotNullorEmpty()] 
+    [ValidateNotNullorEmpty()]
     [string] $adminUsername,
 
     [Parameter(Mandatory = $true)]
-    [ValidateNotNullorEmpty()] 
+    [ValidateNotNullorEmpty()]
     [string] $pw
 )
 
@@ -24,24 +24,24 @@ begin {
             [Parameter(Mandatory = $True)]
             [ValidateNotNullOrEmpty()]
             [System.String] $logPath,
-        
+
             [Parameter(Mandatory = $True)]
             [ValidateNotNullOrEmpty()]
             [System.String] $object,
-        
+
             [Parameter(Mandatory = $True)]
             [ValidateNotNullOrEmpty()]
             [System.String] $message,
-        
+
             [Parameter(Mandatory = $True)]
             [ValidateNotNullOrEmpty()]
             [ValidateSet('Information', 'Warning', 'Error', 'Verbose', 'Debug')]
             [System.String] $severity,
-        
+
             [Parameter(Mandatory = $False)]
             [Switch] $toHost
         )
-        
+
         begin {
             $date = (Get-Date).ToLongTimeString()
         }
@@ -53,7 +53,7 @@ begin {
                     Write-Host "$object" -ForegroundColor Yellow -NoNewline
                     Write-Host "] " -ForegroundColor White -NoNewline
                     Write-Host ":: " -ForegroundColor White -NoNewline
-        
+
                     Switch ($severity) {
                         'Information' {
                             Write-Host "$message" -ForegroundColor White
@@ -73,7 +73,7 @@ begin {
                     }
                 }
             }
-        
+
             switch ($severity) {
                 "Information" { [int]$type = 1 }
                 "Warning" { [int]$type = 2 }
@@ -81,9 +81,9 @@ begin {
                 'Verbose' { [int]$type = 2 }
                 'Debug' { [int]$type = 2 }
             }
-        
+
             if (!(Test-Path (Split-Path $logPath -Parent))) { New-Item -Path (Split-Path $logPath -Parent) -ItemType Directory -Force | Out-Null }
-        
+
             $content = "<![LOG[$message]LOG]!>" + `
                 "<time=`"$(Get-Date -Format "HH:mm:ss.ffffff")`" " + `
                 "date=`"$(Get-Date -Format "M-d-yyyy")`" " + `
@@ -115,15 +115,15 @@ process {
     # Disable Built-in Administrator Account
     Disable-LocalUser -SID (Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }).Sid.Value
     Write-Log -Object "Hardening" -Message "Disabled SID500 Administator account" -Severity Information -LogPath $LogPath
-        
+
     # Remove Built-in Admin Profile
     Get-CimInstance -Class Win32_UserProfile | Where-Object { $_.SID -like 'S-1-5-*-500' } | Remove-CimInstance
     Write-Log -Object "Hardening" -Message "Removed SID500 Administator account profile" -Severity Information -LogPath $LogPath
-        
+
     # Rename Guest Account
     Rename-LocalUser -Name "Guest" -NewName "_Guest"
     Write-Log -Object "Hardening" -Message "Renamed Guest account" -Severity Information -LogPath $LogPath
-        
+
     # Disable Guest Account
     Disable-LocalUser -Name "_Guest"
     Write-Log -Object "Hardening" -Message "Disabled Guest account" -Severity Information -LogPath $LogPath
@@ -273,7 +273,7 @@ process {
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v2.0.50727' -Name 'SystemDefaultTlsVersions' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-        
+
     # dotnet 4 SSL
     New-Item -Path 'HKLM:\SOFTWARE\Microsoft\.NETFramework\' -Name 'v4.0.30319' -ErrorAction SilentlyContinue | Out-Null
     New-Item -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\.NETFramework\' -Name 'v4.0.30319' -ErrorAction SilentlyContinue | Out-Null
@@ -291,7 +291,7 @@ process {
     # Disable Protected Mode Banner in IE
     Set-ItemProperty -LiteralPath 'Registry::HKEY_USERS\.DEFAULT\SOFTWARE\Microsoft\Internet Explorer\Main' -Name 'NoProtectedModeBanner' -Value 1 -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Disabled IE Protected Mode Banner" -Severity Information -LogPath $LogPath
-        
+
     # Disable IE First Run Wizard:
     New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\' -Name 'Internet Explorer' -ErrorAction SilentlyContinue | Out-Null
     New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer' -Name 'Main' -ErrorAction SilentlyContinue | Out-Null
@@ -374,8 +374,8 @@ process {
         New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\' -Name 'CloudContent' -ErrorAction SilentlyContinue | Out-Null
         New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
         # Disable the "how to use Windows" contextual popups
-        New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableSoftLanding' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null 
-    
+        New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableSoftLanding' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
+
         $appsToRemove = @('Clipchamp.Clipcham',
             'Microsoft.3DBuilder',
             'Microsoft.549981C3F5F10',
@@ -435,7 +435,7 @@ process {
         $className = "MDM_EnterpriseModernAppManagement_AppManagement01"
         $result = Get-CimInstance -Namespace $namespaceName -Class $className | Invoke-CimMethod -MethodName UpdateScanMethod
     }
-    
+
     # Install NuGet
     try {
         $Provider = 'NuGet'
@@ -488,7 +488,7 @@ process {
         $updates = Get-WindowsUpdate -MicrosoftUpdate -Category 'Critical Updates', 'Definition Updates', 'Security Updates'
     }
     Write-Log -Object "Hardening" -Message "Installed Windows Updates" -Severity Information -LogPath $LogPath -ToHost
-#>    
+#>
 }
 
 end {
