@@ -26,7 +26,6 @@ auto-bump:
     - echo "$SSH_PUBLIC_KEY" >> ~/.ssh/id_rsa.pub
     - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
   script:
-    - git remote set-url origin git@gitlab.com:discover/rentee-core.git # git configuration
     - git config --global user.email "${CI_EMAIL}" && git config --global user.name "${CI_USERNAME}"
     - 'exists=`git show-ref refs/heads/main` && if [ -n "$exists" ]; then git branch -D main; fi'
     - git checkout -b main
