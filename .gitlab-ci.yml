@@ -26,9 +26,11 @@ auto-bump:
     - echo "$SSH_PUBLIC_KEY" >> ~/.ssh/id_rsa.pub
     - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
   script:
+    - git remote set-url origin git@ondemand-engineering/windows/windows-hardening.git # git configuration
     - git config --global user.email "${CI_EMAIL}" && git config --global user.name "${CI_USERNAME}"
     - 'exists=`git show-ref refs/heads/main` && if [ -n "$exists" ]; then git branch -D main; fi'
     - git checkout -b main
+    - git lfs fetch
     - cz bump --yes # execute auto bump and push to main
     - git push origin main:$CI_COMMIT_REF_NAME
     - TAG=$(head -n 1 VERSION) # get the new software version and save into artifacts
