@@ -1,0 +1,12 @@
+---
+commitizen:
+  bump_message: Release version v$current_version -> v$new_version [skip ci]
+  customize:
+    change_type_map:
+      feat: Feature
+      fix: Fix
+  name: cz_customize
+  tag_format: v$version
+  update_changelog_on_bump: true
+  version: 0.0.0
+  version_scheme: semver
