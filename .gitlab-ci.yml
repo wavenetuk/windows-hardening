@@ -30,7 +30,11 @@ auto-bump:
     - 'exists=`git show-ref refs/heads/main` && if [ -n "$exists" ]; then git branch -D main; fi'
     - git checkout -b main
     - cz bump --yes # execute auto bump and push to main
-    - git push --tags origin HEAD:main
+    - git push origin master:$CI_COMMIT_REF_NAME
+    - TAG=$(head -n 1 VERSION) # get the new software version and save into artifacts
+    - echo "#!/bin/sh" >> variables
+    - echo "export TAG='$TAG'" >> variables
+    - git push origin $TAG
   only:
     refs:
       - main
