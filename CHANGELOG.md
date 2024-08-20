@@ -1,3 +1,11 @@
+## v0.0.2 (2024-08-20)
+
+
+- Merge branch 'development' into 'main'
+- fix: amended variables
+- See merge request ondemand-engineering/windows/windows-hardening!11
+- fix: amended variables
+
 ## v0.0.1 (2024-08-20)
 
 
