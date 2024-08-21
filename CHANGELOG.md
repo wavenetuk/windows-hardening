@@ -1,3 +1,10 @@
+## v0.0.6 (2024-08-21)
+
+### Fix
+
+- update with git lfs for standardized ci
+- removed file
+
 ## v0.0.5 (2024-08-21)
 
 ### Fix
