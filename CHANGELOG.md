@@ -1,3 +1,9 @@
+## v0.0.5 (2024-08-21)
+
+### Fix
+
+- amended to conventional commit format
+
 ## v0.0.4 (2024-08-21)
 
 
