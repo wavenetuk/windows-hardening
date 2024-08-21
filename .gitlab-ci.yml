@@ -11,10 +11,10 @@ before_script:
   - pip install docker-compose
 
 stages:
-  - auto-bump
+  - Semantic-Version
 
-auto-bump:
-  stage: auto-bump
+Semantic-Version:
+  stage: Semantic-Version
   image: python:3.8
   before_script:
     - "which ssh-agent || ( apt-get update -qy && apt-get install openssh-client -qqy )"
