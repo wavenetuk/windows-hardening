@@ -1,3 +1,12 @@
+## v0.0.4 (2024-08-21)
+
+
+- Merge branch 'development' into 'main'
+- fix: change name of stage
+- See merge request ondemand-engineering/windows/windows-hardening!13
+- fix: update name
+- fix: change name of stage
+
 ## v0.0.3 (2024-08-21)
 
 
