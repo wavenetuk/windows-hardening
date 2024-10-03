@@ -106,11 +106,9 @@ process {
     # Get Operating System Product Name
     $OS = (Get-CimInstance -ClassName 'Win32_OperatingSystem').Name.Split('|')[0]
 
-    # Create New Admin
-    New-LocalUser $adminUsername -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -Description "Local Administrator" -PasswordNeverExpires | Out-Null
-    Add-LocalGroupMember -Group 'Administrators' -Member $adminUsername | Out-Null
-    Remove-LocalGroupMember -Group 'Users' -Member $adminUsername -ErrorAction SilentlyContinue | Out-Null
-    Write-Log -Object "Hardening" -Message "Created new local Administrator account" -Severity Information -LogPath $LogPath
+    # Rename Built-in Administrator Account
+    Rename-LocalUser -SID (Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }).Sid.Value -NewName "_Administrator"
+    Write-Log -Object "Hardening" -Message "Renamed Administrator account" -Severity Information -LogPath $LogPath
 
     # Disable Built-in Administrator Account
     Disable-LocalUser -SID (Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }).Sid.Value
@@ -119,6 +117,12 @@ process {
     # Remove Built-in Admin Profile
     Get-CimInstance -Class Win32_UserProfile | Where-Object { $_.SID -like 'S-1-5-*-500' } | Remove-CimInstance
     Write-Log -Object "Hardening" -Message "Removed SID500 Administator account profile" -Severity Information -LogPath $LogPath
+
+    # Create New Admin
+    New-LocalUser $adminUsername -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -Description "Local Administrator" -PasswordNeverExpires | Out-Null
+    Add-LocalGroupMember -Group 'Administrators' -Member $adminUsername | Out-Null
+    Remove-LocalGroupMember -Group 'Users' -Member $adminUsername -ErrorAction SilentlyContinue | Out-Null
+    Write-Log -Object "Hardening" -Message "Created new local Administrator account" -Severity Information -LogPath $LogPath
 
     # Rename Guest Account
     Rename-LocalUser -Name "Guest" -NewName "_Guest"
