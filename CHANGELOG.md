@@ -1,3 +1,9 @@
+## v0.0.7 (2024-10-03)
+
+### Fix
+
+- amended administrator rename/disable
+
 ## v0.0.6 (2024-08-21)
 
 ### Fix
