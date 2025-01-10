@@ -82,7 +82,7 @@ begin {
                 'Debug' { [int]$type = 2 }
             }
 
-            if (!(Test-Path (Split-Path $logPath -Parent))) { New-Item -Path (Split-Path $logPath -Parent) -ItemType Directory -Force | Out-Null }
+            if (!(Test-Path (Split-Path $logPath -Parent))) { New-Item -Path (Split-Path $logPath -Parent) -ItemType Directory -Force }
 
             $content = "<![LOG[$message]LOG]!>" + `
                 "<time=`"$(Get-Date -Format "HH:mm:ss.ffffff")`" " + `
@@ -107,29 +107,35 @@ process {
     $OS = (Get-CimInstance -ClassName 'Win32_OperatingSystem').Name.Split('|')[0]
 
     # Rename Built-in Administrator Account
-    Rename-LocalUser -SID (Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }).Sid.Value -NewName "_Administrator"
-    Write-Log -Object "Hardening" -Message "Renamed Administrator account" -Severity Information -LogPath $LogPath
+    $adminAccount = Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }
+    if ($adminAccount.Name -eq $adminUsername) {
+        Rename-LocalUser -SID $adminAccount.Sid.Value -NewName "_Administrator"
+        Write-Log -Object "Hardening" -Message "Renamed Administrator account" -Severity Information -LogPath $LogPath
 
-    # Disable Built-in Administrator Account
-    Disable-LocalUser -SID (Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }).Sid.Value
-    Write-Log -Object "Hardening" -Message "Disabled SID500 Administator account" -Severity Information -LogPath $LogPath
+        # Disable Built-in Administrator Account
+        Disable-LocalUser -SID $adminAccount.Sid.Value
+        Write-Log -Object "Hardening" -Message "Disabled SID500 Administator account" -Severity Information -LogPath $LogPath
 
-    # Remove Built-in Admin Profile
-    Get-CimInstance -Class Win32_UserProfile | Where-Object { $_.SID -like 'S-1-5-*-500' } | Remove-CimInstance
-    Write-Log -Object "Hardening" -Message "Removed SID500 Administator account profile" -Severity Information -LogPath $LogPath
+        # Remove Built-in Admin Profile
+        Get-CimInstance -Class Win32_UserProfile | Where-Object { $_.SID -like "$adminAccount.Sid.Value" } | Remove-CimInstance
+        Write-Log -Object "Hardening" -Message "Removed SID500 Administator account profile" -Severity Information -LogPath $LogPath
+    }
 
     # Create New Admin
-    New-LocalUser $adminUsername -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -Description "Local Administrator" -PasswordNeverExpires | Out-Null
-    Add-LocalGroupMember -Group 'Administrators' -Member $adminUsername | Out-Null
-    Remove-LocalGroupMember -Group 'Users' -Member $adminUsername -ErrorAction SilentlyContinue | Out-Null
+    New-LocalUser $adminUsername -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -Description "Local Administrator" -PasswordNeverExpires
+    Add-LocalGroupMember -Group 'Administrators' -Member $adminUsername
+    Remove-LocalGroupMember -Group 'Users' -Member $adminUsername -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Created new local Administrator account" -Severity Information -LogPath $LogPath
 
     # Rename Guest Account
-    Rename-LocalUser -Name "Guest" -NewName "_Guest"
-    Write-Log -Object "Hardening" -Message "Renamed Guest account" -Severity Information -LogPath $LogPath
+    $guestAccount = Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-501' }
+    if ($guestAccount.Name -eq "Guest") {
+        Rename-LocalUser -SID $guestAccount.Sid.Value -NewName "_Guest"
+        Write-Log -Object "Hardening" -Message "Renamed Guest account" -Severity Information -LogPath $LogPath
+    }
 
     # Disable Guest Account
-    Disable-LocalUser -Name "_Guest"
+    Disable-LocalUser -SID $guestAccount.Sid.Value
     Write-Log -Object "Hardening" -Message "Disabled Guest account" -Severity Information -LogPath $LogPath
 
     # Set time source
@@ -151,7 +157,7 @@ process {
     # Change Optical Drive to Z:
     $Optical = Get-CimInstance -Class Win32_CDROMDrive | Select-Object -ExpandProperty Drive
     if (!($null -eq $Optical) -and !($Optical -eq 'Z:')) {
-        Set-CimInstance -InputObject ( Get-CimInstance -Class Win32_volume -Filter "DriveLetter = '$Optical'" ) -Arguments @{DriveLetter = 'Z:' } | Out-Null
+        Set-CimInstance -InputObject ( Get-CimInstance -Class Win32_volume -Filter "DriveLetter = '$Optical'" ) -Arguments @{DriveLetter = 'Z:' }
         Write-Log -Object "Hardening" -Message "Set Optical Drive to Z:" -Severity Information -LogPath $LogPath
     }
 
@@ -186,36 +192,36 @@ process {
     Write-Log -Object "Hardening" -Message "Set EventLog Size" -Severity Information -LogPath $LogPath
 
     # Allow ping through windows firewall
-    New-NetFirewallRule -DisplayName 'Allow ICMPv4-In' -Direction Inbound -Action Allow -Protocol ICMPv4 -ErrorAction SilentlyContinue | Out-Null
-    New-NetFirewallRule -DisplayName 'Allow ICMPv6-In' -Direction Inbound -Action Allow -Protocol ICMPv6 -ErrorAction SilentlyContinue | Out-Null
+    New-NetFirewallRule -DisplayName 'Allow ICMPv4-In' -Direction Inbound -Action Allow -Protocol ICMPv4 -ErrorAction SilentlyContinue
+    New-NetFirewallRule -DisplayName 'Allow ICMPv6-In' -Direction Inbound -Action Allow -Protocol ICMPv6 -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Confgiured Windows Firewall to allow Ping" -Severity Information -LogPath $LogPath
 
     # Disable Windows Powershell V2
     if ($OS -like "*Server*") {
-        Remove-WindowsFeature -Name PowerShell-V2 -ErrorAction SilentlyContinue | Out-Null
+        Remove-WindowsFeature -Name PowerShell-V2 -ErrorAction SilentlyContinue
     }
     else {
-        Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root -ErrorAction SilentlyContinue | Out-Null
+        Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root -ErrorAction SilentlyContinue
     }
     Write-Log -Object "Hardening" -Message "Uninstalled PowerShell V2" -Severity Information -LogPath $LogPath
 
     # Enable Telnet Client
     if ($OS -like "*Server*") {
-        Install-WindowsFeature -Name Telnet-Client -ErrorAction SilentlyContinue | Out-Null
+        Install-WindowsFeature -Name Telnet-Client -ErrorAction SilentlyContinue
     }
     else {
-        Enable-WindowsOptionalFeature -Online -FeatureName TelnetClient -ErrorAction SilentlyContinue | Out-Null
+        Enable-WindowsOptionalFeature -Online -FeatureName TelnetClient -ErrorAction SilentlyContinue
     }
     Write-Log -Object "Hardening" -Message "Installed Telnet Client" -Severity Information -LogPath $LogPath
 
     # Enable Remote Powershell
-    Enable-PSRemoting -SkipNetworkProfileCheck -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+    Enable-PSRemoting -SkipNetworkProfileCheck -Confirm:$false -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Enabled PowerShell remoting" -Severity Information -LogPath $LogPath
 
     # Stop and Disable Print Spooler
     if ($OS -like "*Server*") {
-        Set-Service -Name Spooler -StartupType Disabled | Out-Null
-        Stop-Service -Name Spooler -Force  | Out-Null
+        Set-Service -Name Spooler -StartupType Disabled
+        Stop-Service -Name Spooler -Force
         Write-Log -Object "Hardening" -Message "Disabled Print Spooler Service" -Severity Information -LogPath $LogPath
     }
 
@@ -226,65 +232,65 @@ process {
 
     # Configure TLS/SSL
     # TLS 1.0
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'TLS 1.0' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0' -Name 'Client' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0' -Name 'Server' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Client' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Server' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'TLS 1.0' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0' -Name 'Client' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0' -Name 'Server' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Client' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Server' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
 
     # TLS 1.1
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'TLS 1.1' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1' -Name 'Client' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1' -Name 'Server' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Client' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Server' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'TLS 1.1' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1' -Name 'Client' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1' -Name 'Server' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Client' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Server' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.1\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
 
     # TLS 1.2
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'TLS 1.2' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2' -Name 'Client' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2' -Name 'Server' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client' -Name 'Enabled' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server' -Name 'Enabled' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'TLS 1.2' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2' -Name 'Client' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2' -Name 'Server' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client' -Name 'Enabled' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server' -Name 'Enabled' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
 
     # SSL 2.0
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'SSL 2.0' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0' -Name 'Client' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0' -Name 'Server' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Client' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Server' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'SSL 2.0' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0' -Name 'Client' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0' -Name 'Server' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Client' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Server' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
 
     #SSL 3.0
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'SSL 3.0' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0' -Name 'Client' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0' -Name 'Server' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Client' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\' -Name 'SSL 3.0' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0' -Name 'Client' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0' -Name 'Server' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Client' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Client' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server' -Name 'Enabled' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server' -Name 'DisabledByDefault' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
 
     # dotnet 2 SSL
-    New-Item -Path 'HKLM:\SOFTWARE\Microsoft\.NETFramework\' -Name 'v2.0.50727' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\.NETFramework\' -Name 'v2.0.50727' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v2.0.50727' -Name 'SystemDefaultTlsVersions' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v2.0.50727' -Name 'SystemDefaultTlsVersions' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'HKLM:\SOFTWARE\Microsoft\.NETFramework\' -Name 'v2.0.50727' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\.NETFramework\' -Name 'v2.0.50727' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v2.0.50727' -Name 'SystemDefaultTlsVersions' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v2.0.50727' -Name 'SystemDefaultTlsVersions' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
 
     # dotnet 4 SSL
-    New-Item -Path 'HKLM:\SOFTWARE\Microsoft\.NETFramework\' -Name 'v4.0.30319' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\.NETFramework\' -Name 'v4.0.30319' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v4.0.30319' -Name 'SystemDefaultTlsVersions' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v4.0.30319' -Name 'SystemDefaultTlsVersions' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'HKLM:\SOFTWARE\Microsoft\.NETFramework\' -Name 'v4.0.30319' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\.NETFramework\' -Name 'v4.0.30319' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v4.0.30319' -Name 'SystemDefaultTlsVersions' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v4.0.30319' -Name 'SystemDefaultTlsVersions' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
 
     Write-Log -Object "Hardening" -Message "Configured TLS/SSL" -Severity Information -LogPath $LogPath
 
@@ -297,9 +303,9 @@ process {
     Write-Log -Object "Hardening" -Message "Disabled IE Protected Mode Banner" -Severity Information -LogPath $LogPath
 
     # Disable IE First Run Wizard:
-    New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\' -Name 'Internet Explorer' -ErrorAction SilentlyContinue | Out-Null
-    New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer' -Name 'Main' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Internet Explorer\Main' -Name 'DisableFirstRunCustomize' -Value 1  -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\' -Name 'Internet Explorer' -ErrorAction SilentlyContinue
+    New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer' -Name 'Main' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Internet Explorer\Main' -Name 'DisableFirstRunCustomize' -Value 1  -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Disable IE First Run Wizard" -Severity Information -LogPath $LogPath
 
     # Disable WAC Prompt
@@ -322,35 +328,35 @@ process {
     Write-Log -Object "Hardening" -Message "Disable Hibernate" -Severity Information -LogPath $LogPath
 
     # Disable New Network Dialog
-    New-Item -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Network' -Name 'NewNetworkWindowOff' -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Network' -Name 'NewNetworkWindowOff' -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Disable New Network Dialog" -Severity Information -LogPath $LogPath
 
     # Disable LLMNR
-    New-Item -Path 'HKLM:\SOFTWARE\policies\Microsoft\Windows NT\' -Name 'DNSClient' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -PropertyType DWord -Value 0 -ErrorAction SilentlyContinue | Out-Null
+    New-Item -Path 'HKLM:\SOFTWARE\policies\Microsoft\Windows NT\' -Name 'DNSClient' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\policies\Microsoft\Windows NT\DNSClient' -Name 'EnableMulticast' -PropertyType DWord -Value 0 -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Disable LLMNR" -Severity Information -LogPath $LogPath
 
     # Disable NetBIOS
     $key = "HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces"
-    Get-ChildItem $key | ForEach-Object { Set-ItemProperty -Path "$key\$($_.pschildname)" -Name NetbiosOptions -Value 2 | Out-Null }
+    Get-ChildItem $key | ForEach-Object { Set-ItemProperty -Path "$key\$($_.pschildname)" -Name NetbiosOptions -Value 2 }
     Write-Log -Object "Hardening" -Message "Disable NetBIOS" -Severity Information -LogPath $LogPath
 
     # Enable Task Manager Disk Performance Counters
-    diskperf -Y | Out-Null
+    diskperf -Y
     Write-Log -Object "Hardening" -Message "Enable Task Manager Disk Performance Counters" -Severity Information -LogPath $LogPath
 
     # Modify SMB defaults
-    Disable-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -NoRestart | Out-Null
+    Disable-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -NoRestart
     Write-Log -Object "Hardening" -Message "Disable SMB1" -Severity Information -LogPath $LogPath
 
     # SMB Modifications for performance:
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DisableBandwidthThrottling' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DisableLargeMtu' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileInfoCacheEntriesMax' -PropertyType DWord -Value '8000' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DirectoryCacheEntriesMax' -PropertyType DWord -Value '1000' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileNotFoundcacheEntriesMax' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'MaxCmds' -PropertyType DWord -Value '8000' -ErrorAction SilentlyContinue | Out-Null
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name 'EnableWsd' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DisableBandwidthThrottling' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DisableLargeMtu' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileInfoCacheEntriesMax' -PropertyType DWord -Value '8000' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DirectoryCacheEntriesMax' -PropertyType DWord -Value '1000' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileNotFoundcacheEntriesMax' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'MaxCmds' -PropertyType DWord -Value '8000' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name 'EnableWsd' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
 
     # Enable SMB signing
     Set-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkStation\Parameters' -Name "RequireSecuritySignature" -Value 1 -ErrorAction SilentlyContinue
@@ -375,10 +381,10 @@ process {
         $Apps = Get-ProvisionedAppxPackage -Online
 
         # Disable "Consumer Features" (aka downloading apps from the internet automatically)
-        New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\' -Name 'CloudContent' -ErrorAction SilentlyContinue | Out-Null
-        New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
+        New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\' -Name 'CloudContent' -ErrorAction SilentlyContinue
+        New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
         # Disable the "how to use Windows" contextual popups
-        New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableSoftLanding' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableSoftLanding' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
 
         $appsToRemove = @('Clipchamp.Clipcham',
             'Microsoft.3DBuilder',
@@ -428,23 +434,24 @@ process {
         # Remove Windows Store Apps
         ForEach ($App in $Apps) {
             If ($App.DisplayName -in $appsToRemove) {
-                Remove-AppxProvisionedPackage -Online -PackageName $App.PackageName | Out-Null
-                Remove-AppxPackage -Package $App.PackageName | Out-Null
+                Remove-AppxProvisionedPackage -Online -PackageName $App.PackageName
+                Remove-AppxPackage -Package $App.PackageName
                 Write-Log -Object "Hardening" -Message "Removed $($App.DisplayName)" -Severity Information -LogPath $LogPath
             }
         }
 
-        # Update Windows Store Apps
-        $namespaceName = "root\cimv2\mdm\dmmap"
-        $className = "MDM_EnterpriseModernAppManagement_AppManagement01"
-        $result = Get-CimInstance -Namespace $namespaceName -Class $className | Invoke-CimMethod -MethodName UpdateScanMethod
+        # # Update Windows Store Apps
+        # $namespaceName = "root\cimv2\mdm\dmmap"
+        # $className = "MDM_EnterpriseModernAppManagement_AppManagement01"
+        # $result = Get-CimInstance -Namespace $namespaceName -Class $className | Invoke-CimMethod -MethodName UpdateScanMethod
     }
 
+    <#
     # Install NuGet
     try {
         $Provider = 'NuGet'
         Write-Log -Object "Hardening" -Message "PowerShell Provider $Provider installing" -Severity Information -LogPath $LogPath
-        Install-PackageProvider -Name $Provider -Confirm:$False -Force | Out-Null
+        Install-PackageProvider -Name $Provider -Confirm:$False -Force
         Write-Log -Object "Hardening" -Message "PowerShell Provider $Provider installed" -Severity Information -LogPath $LogPath
     }
     catch {
@@ -460,7 +467,7 @@ process {
     try {
         $Module = 'PSWindowsUpdate'
         Write-Log -Object "Hardening" -Message "PowerShell Module $Module installing" -Severity Information -LogPath $LogPath
-        Install-Module -Name $Module -Confirm:$false -Force | Out-Null
+        Install-Module -Name $Module -Confirm:$false -Force
         Write-Log -Object "Hardening" -Message "PowerShell Module $Module installed" -Severity Information -LogPath $LogPath
     }
     catch {
@@ -473,7 +480,7 @@ process {
         }
     }
 
-    <# Install Windows Updates
+    # Install Windows Updates
     $updates = Get-WindowsUpdate -MicrosoftUpdate -Category 'Critical Updates', 'Definition Updates', 'Security Updates'
     while (![string]::IsNullOrEmpty($updates)) {
         try {
