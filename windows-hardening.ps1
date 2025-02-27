@@ -5,11 +5,11 @@
 
 Param (
     [Parameter(Mandatory = $true)]
-    [ValidateNotNullorEmpty()]
+    [ValidateNotNullOrEmpty()]
     [string] $adminUsername,
 
     [Parameter(Mandatory = $true)]
-    [ValidateNotNullorEmpty()]
+    [ValidateNotNullOrEmpty()]
     [string] $pw
 )
 
@@ -114,11 +114,11 @@ process {
 
         # Disable Built-in Administrator Account
         Disable-LocalUser -SID $adminAccount.Sid.Value
-        Write-Log -Object "Hardening" -Message "Disabled SID500 Administator account" -Severity Information -LogPath $LogPath
+        Write-Log -Object "Hardening" -Message "Disabled SID500 Administrator account" -Severity Information -LogPath $LogPath
 
         # Remove Built-in Admin Profile
         Get-CimInstance -Class Win32_UserProfile | Where-Object { $_.SID -like "$adminAccount.Sid.Value" } | Remove-CimInstance
-        Write-Log -Object "Hardening" -Message "Removed SID500 Administator account profile" -Severity Information -LogPath $LogPath
+        Write-Log -Object "Hardening" -Message "Removed SID500 Administrator account profile" -Severity Information -LogPath $LogPath
     }
 
     # Create New Admin
@@ -194,7 +194,7 @@ process {
     # Allow ping through windows firewall
     New-NetFirewallRule -DisplayName 'Allow ICMPv4-In' -Direction Inbound -Action Allow -Protocol ICMPv4 -ErrorAction SilentlyContinue
     New-NetFirewallRule -DisplayName 'Allow ICMPv6-In' -Direction Inbound -Action Allow -Protocol ICMPv6 -ErrorAction SilentlyContinue
-    Write-Log -Object "Hardening" -Message "Confgiured Windows Firewall to allow Ping" -Severity Information -LogPath $LogPath
+    Write-Log -Object "Hardening" -Message "Configured Windows Firewall to allow Ping" -Severity Information -LogPath $LogPath
 
     # Disable Windows Powershell V2
     if ($OS -like "*Server*") {
@@ -338,7 +338,7 @@ process {
 
     # Disable NetBIOS
     $key = "HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces"
-    Get-ChildItem $key | ForEach-Object { Set-ItemProperty -Path "$key\$($_.pschildname)" -Name NetbiosOptions -Value 2 }
+    Get-ChildItem $key | ForEach-Object { Set-ItemProperty -Path "$key\$($_.PSChildName)" -Name NetbiosOptions -Value 2 }
     Write-Log -Object "Hardening" -Message "Disable NetBIOS" -Severity Information -LogPath $LogPath
 
     # Enable Task Manager Disk Performance Counters
@@ -354,7 +354,7 @@ process {
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DisableLargeMtu' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileInfoCacheEntriesMax' -PropertyType DWord -Value '8000' -ErrorAction SilentlyContinue
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DirectoryCacheEntriesMax' -PropertyType DWord -Value '1000' -ErrorAction SilentlyContinue
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileNotFoundcacheEntriesMax' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileNotFoundCacheEntriesMax' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'MaxCmds' -PropertyType DWord -Value '8000' -ErrorAction SilentlyContinue
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name 'EnableWsd' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
 
@@ -386,7 +386,7 @@ process {
         # Disable the "how to use Windows" contextual popups
         New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableSoftLanding' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
 
-        $appsToRemove = @('Clipchamp.Clipcham',
+        $appsToRemove = @('Clipchamp.Clipchamp',
             'Microsoft.3DBuilder',
             'Microsoft.549981C3F5F10',
             'Microsoft.BingFinance',
