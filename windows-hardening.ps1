@@ -4,8 +4,7 @@
 #>
 
 Param (
-    [Parameter(Mandatory = $false, HelpMessage = 'Recreate admin account?', ParameterSetName = 'RecreateAdmin')]
-    [Parameter(Mandatory = $false, HelpMessage = 'Recreate admin account?', ParameterSetName = 'NoRecreateAdmin')]
+    [Parameter(Mandatory = $true, HelpMessage = 'Recreate admin account?')]
     [ValidateSet('true', 'false')]
     [string] $recreateAdmin = 'true',
 
@@ -17,7 +16,11 @@ Param (
     [Parameter(Mandatory = $true, ParameterSetName = 'RecreateAdmin')]
     [Parameter(Mandatory = $false, ParameterSetName = 'NoRecreateAdmin')]
     [ValidateNotNullOrEmpty()]
-    [string] $pw
+    [string] $pw,
+
+    [Parameter(Mandatory = $false, HelpMessage = 'Restart the virtual machine')]
+    [ValidateSet('true', 'false')]
+    [string] $restart = 'true'
 )
 
 begin {
@@ -108,6 +111,7 @@ begin {
 
     $LogPath = "$env:SYSTEMROOT\TEMP\Deployment_" + (Get-Date -Format 'yyyy-MM-dd')
     $recreateAdmin = [System.Convert]::ToBoolean($recreateAdmin)
+    $restartParam = [System.Convert]::ToBoolean($restart)
 }
 
 process {
@@ -514,5 +518,7 @@ process {
 
 end {
     # Restart Computer
-    Restart-Computer -Force
+    if ($restartParam -and $restartPostInstall) {
+        Restart-Computer -Force
+    }
 }
