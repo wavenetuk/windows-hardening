@@ -1,3 +1,9 @@
+## v0.1.5 (2025-04-08)
+
+### Fix
+
+- rename variable for admin recreation parameter in hardening script (#5)
+
 ## v0.1.4 (2025-04-08)
 
 ### Fix
