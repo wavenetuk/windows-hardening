@@ -4,11 +4,18 @@
 #>
 
 Param (
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false, HelpMessage = 'Recreate admin account?', ParameterSetName = 'RecreateAdmin')]
+    [Parameter(Mandatory = $false, HelpMessage = 'Recreate admin account?', ParameterSetName = 'NoRecreateAdmin')]
+    [ValidateSet('true', 'false')]
+    [string] $recreateAdmin = 'true',
+
+    [Parameter(Mandatory = $true, ParameterSetName = 'RecreateAdmin')]
+    [Parameter(Mandatory = $false, ParameterSetName = 'NoRecreateAdmin')]
     [ValidateNotNullOrEmpty()]
     [string] $adminUsername,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = 'RecreateAdmin')]
+    [Parameter(Mandatory = $false, ParameterSetName = 'NoRecreateAdmin')]
     [ValidateNotNullOrEmpty()]
     [string] $pw
 )
@@ -100,6 +107,7 @@ begin {
     }
 
     $LogPath = "$env:SYSTEMROOT\TEMP\Deployment_" + (Get-Date -Format 'yyyy-MM-dd')
+    $recreateAdmin = [System.Convert]::ToBoolean($recreateAdmin)
 }
 
 process {
@@ -107,25 +115,27 @@ process {
     $OS = (Get-CimInstance -ClassName 'Win32_OperatingSystem').Name.Split('|')[0]
 
     # Rename Built-in Administrator Account
-    $adminAccount = Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }
-    if ($adminAccount.Name -eq $adminUsername) {
-        Rename-LocalUser -SID $adminAccount.Sid.Value -NewName "_Administrator"
-        Write-Log -Object "Hardening" -Message "Renamed Administrator account" -Severity Information -LogPath $LogPath
+    if ($recreateAdmin) {
+        $adminAccount = Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }
+        if ($adminAccount.Name -eq $adminUsername) {
+            Rename-LocalUser -SID $adminAccount.Sid.Value -NewName "_Administrator"
+            Write-Log -Object "Hardening" -Message "Renamed Administrator account" -Severity Information -LogPath $LogPath
 
-        # Disable Built-in Administrator Account
-        Disable-LocalUser -SID $adminAccount.Sid.Value
-        Write-Log -Object "Hardening" -Message "Disabled SID500 Administrator account" -Severity Information -LogPath $LogPath
+            # Disable Built-in Administrator Account
+            Disable-LocalUser -SID $adminAccount.Sid.Value
+            Write-Log -Object "Hardening" -Message "Disabled SID500 Administrator account" -Severity Information -LogPath $LogPath
 
-        # Remove Built-in Admin Profile
-        Get-CimInstance -Class Win32_UserProfile | Where-Object { $_.SID -like "$adminAccount.Sid.Value" } | Remove-CimInstance
-        Write-Log -Object "Hardening" -Message "Removed SID500 Administrator account profile" -Severity Information -LogPath $LogPath
+            # Remove Built-in Admin Profile
+            Get-CimInstance -Class Win32_UserProfile | Where-Object { $_.SID -like "$($adminAccount.Sid.Value)" } | Remove-CimInstance
+            Write-Log -Object "Hardening" -Message "Removed SID500 Administrator account profile" -Severity Information -LogPath $LogPath
+        }
+
+        # Create New Admin
+        New-LocalUser $adminUsername -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -Description "Local Administrator" -PasswordNeverExpires
+        Add-LocalGroupMember -Group 'Administrators' -Member $adminUsername
+        Remove-LocalGroupMember -Group 'Users' -Member $adminUsername -ErrorAction SilentlyContinue
+        Write-Log -Object "Hardening" -Message "Created new local Administrator account" -Severity Information -LogPath $LogPath
     }
-
-    # Create New Admin
-    New-LocalUser $adminUsername -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -Description "Local Administrator" -PasswordNeverExpires
-    Add-LocalGroupMember -Group 'Administrators' -Member $adminUsername
-    Remove-LocalGroupMember -Group 'Users' -Member $adminUsername -ErrorAction SilentlyContinue
-    Write-Log -Object "Hardening" -Message "Created new local Administrator account" -Severity Information -LogPath $LogPath
 
     # Rename Guest Account
     $guestAccount = Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-501' }
