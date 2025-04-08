@@ -110,7 +110,7 @@ begin {
     }
 
     $LogPath = "$env:SYSTEMROOT\TEMP\Deployment_" + (Get-Date -Format 'yyyy-MM-dd')
-    $recreateAdmin = [System.Convert]::ToBoolean($recreateAdmin)
+    $recreateAdminParam = [System.Convert]::ToBoolean($recreateAdmin)
     $restartParam = [System.Convert]::ToBoolean($restart)
 }
 
@@ -119,7 +119,7 @@ process {
     $OS = (Get-CimInstance -ClassName 'Win32_OperatingSystem').Name.Split('|')[0]
 
     # Rename Built-in Administrator Account
-    if ($recreateAdmin) {
+    if ($recreateAdminParam) {
         $adminAccount = Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }
         if ($adminAccount.Name -eq $adminUsername) {
             Rename-LocalUser -SID $adminAccount.Sid.Value -NewName "_Administrator"
