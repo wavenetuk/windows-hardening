@@ -1,3 +1,9 @@
+## v0.1.4 (2025-04-08)
+
+### Fix
+
+- enforce mandatory parameter for admin account recreation and add restart option in hardening script (#4)
+
 ## v0.1.3 (2025-04-08)
 
 ### Fix
