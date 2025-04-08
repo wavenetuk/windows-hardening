@@ -1,3 +1,9 @@
+## v0.1.3 (2025-04-08)
+
+### Fix
+
+- update parameters for admin account recreation in hardening script (#3)
+
 ## v0.1.2 (2025-02-28)
 
 ### Fix
