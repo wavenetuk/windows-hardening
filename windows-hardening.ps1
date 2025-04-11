@@ -8,17 +8,13 @@ Param (
     [ValidateSet('true', 'false')]
     [string] $recreateAdmin = 'true',
 
-    [Parameter(Mandatory = $true, ParameterSetName = 'RecreateAdmin')]
-    [Parameter(Mandatory = $false, ParameterSetName = 'NoRecreateAdmin')]
-    [ValidateNotNullOrEmpty()]
+    [Parameter(Mandatory = $false, HelpMessage = 'Administrator Username')]
     [string] $adminUsername,
 
-    [Parameter(Mandatory = $true, ParameterSetName = 'RecreateAdmin')]
-    [Parameter(Mandatory = $false, ParameterSetName = 'NoRecreateAdmin')]
-    [ValidateNotNullOrEmpty()]
+    [Parameter(Mandatory = $false, HelpMessage = 'Administrator Password')]
     [string] $pw,
 
-    [Parameter(Mandatory = $false, HelpMessage = 'Restart the virtual machine')]
+    [Parameter(Mandatory = $false, HelpMessage = 'Restart the virtual machine?')]
     [ValidateSet('true', 'false')]
     [string] $restart = 'true'
 )
