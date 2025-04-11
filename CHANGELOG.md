@@ -1,3 +1,9 @@
+## v0.1.6 (2025-04-11)
+
+### Fix
+
+- update parameter attributes for admin username and password in hardening script (#6)
+
 ## v0.1.5 (2025-04-08)
 
 ### Fix
