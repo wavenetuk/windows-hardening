@@ -1,3 +1,9 @@
+## v0.1.7 (2025-04-11)
+
+### Fix
+
+- change mandatory attribute for recreate admin account parameter in hardening script (#7)
+
 ## v0.1.6 (2025-04-11)
 
 ### Fix
