@@ -4,7 +4,7 @@
 #>
 
 Param (
-    [Parameter(Mandatory = $true, HelpMessage = 'Recreate admin account?')]
+    [Parameter(Mandatory = $false, HelpMessage = 'Recreate admin account?')]
     [ValidateSet('true', 'false')]
     [string] $recreateAdmin = 'true',
 
