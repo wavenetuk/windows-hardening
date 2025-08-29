@@ -1,0 +1,54 @@
+{
+  "build": {
+    "context": "..",
+    "dockerfile": "Dockerfile"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.powershell",
+        "ms-vscode-remote.remote-wsl",
+        "ms-azure-devops.azure-pipelines",
+        "ms-vscode.azure-repos",
+        "github.vscode-pull-request-github",
+        "ms-azuretools.vscode-azureresourcegroups",
+        "ms-azuretools.vscode-azure-github-copilot",
+        "github.vscode-github-actions",
+        "ms-azuretools.vscode-docker",
+        "ms-azuretools.vscode-bicep",
+        "ms-vscode.vscode-node-azure-pack",
+        "msazurermtools.azurerm-vscode-tools",
+        "pkief.material-icon-theme"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "pwsh"
+      }
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers-extra/features/cosign:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/azure-cli:1": {
+      "bicepVersion": "latest",
+      "installBicep": true,
+      "installUsingPython": true,
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "nonFreePackages": true,
+      "upgradePackages": false,
+      "username": "vscode"
+    },
+    "ghcr.io/devcontainers/features/git-lfs:1": {},
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/powershell:1": {
+      "modules": "Az, Pester, PSScriptAnalyzer",
+      "version": "latest"
+    }
+  },
+  "name": "OnDemand Container",
+  "postAttachCommand": "pwsh",
+  "postCreateCommand": "sudo chsh vscode -s \"$(which pwsh)\" && pwsh -Command \"pre-commit install\""
+}
