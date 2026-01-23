@@ -1,3 +1,9 @@
+## v0.2.0 (2025-08-29)
+
+### Feat
+
+- update pre-commit configuration and add Docker support for development environment (#8)
+
 ## v0.1.7 (2025-04-11)
 
 ### Fix

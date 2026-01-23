@@ -432,7 +432,6 @@ process {
             'Microsoft.SkypeApp',
             'Microsoft.Todos',
             'Microsoft.Wallet',
-            'Microsoft.Windows.Photos',
             'Microsoft.WindowsAlarms',
             'Microsoft.WindowsCamera',
             'Microsoft.WindowsCommunicationsApps',
