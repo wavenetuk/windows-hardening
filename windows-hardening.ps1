@@ -4,13 +4,19 @@
 #>
 
 Param (
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullorEmpty()]
+    [Parameter(Mandatory = $false, HelpMessage = 'Recreate admin account?')]
+    [ValidateSet('true', 'false')]
+    [string] $recreateAdmin = 'true',
+
+    [Parameter(Mandatory = $false, HelpMessage = 'Administrator Username')]
     [string] $adminUsername,
 
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullorEmpty()]
-    [string] $pw
+    [Parameter(Mandatory = $false, HelpMessage = 'Administrator Password')]
+    [string] $pw,
+
+    [Parameter(Mandatory = $false, HelpMessage = 'Restart the virtual machine?')]
+    [ValidateSet('true', 'false')]
+    [string] $restart = 'true'
 )
 
 begin {
@@ -100,6 +106,8 @@ begin {
     }
 
     $LogPath = "$env:SYSTEMROOT\TEMP\Deployment_" + (Get-Date -Format 'yyyy-MM-dd')
+    $recreateAdminParam = [System.Convert]::ToBoolean($recreateAdmin)
+    $restartParam = [System.Convert]::ToBoolean($restart)
 }
 
 process {
@@ -107,25 +115,27 @@ process {
     $OS = (Get-CimInstance -ClassName 'Win32_OperatingSystem').Name.Split('|')[0]
 
     # Rename Built-in Administrator Account
-    $adminAccount = Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }
-    if ($adminAccount.Name -eq $adminUsername) {
-        Rename-LocalUser -SID $adminAccount.Sid.Value -NewName "_Administrator"
-        Write-Log -Object "Hardening" -Message "Renamed Administrator account" -Severity Information -LogPath $LogPath
+    if ($recreateAdminParam) {
+        $adminAccount = Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-500' }
+        if ($adminAccount.Name -eq $adminUsername) {
+            Rename-LocalUser -SID $adminAccount.Sid.Value -NewName "_Administrator"
+            Write-Log -Object "Hardening" -Message "Renamed Administrator account" -Severity Information -LogPath $LogPath
 
-        # Disable Built-in Administrator Account
-        Disable-LocalUser -SID $adminAccount.Sid.Value
-        Write-Log -Object "Hardening" -Message "Disabled SID500 Administator account" -Severity Information -LogPath $LogPath
+            # Disable Built-in Administrator Account
+            Disable-LocalUser -SID $adminAccount.Sid.Value
+            Write-Log -Object "Hardening" -Message "Disabled SID500 Administrator account" -Severity Information -LogPath $LogPath
 
-        # Remove Built-in Admin Profile
-        Get-CimInstance -Class Win32_UserProfile | Where-Object { $_.SID -like "$adminAccount.Sid.Value" } | Remove-CimInstance
-        Write-Log -Object "Hardening" -Message "Removed SID500 Administator account profile" -Severity Information -LogPath $LogPath
+            # Remove Built-in Admin Profile
+            Get-CimInstance -Class Win32_UserProfile | Where-Object { $_.SID -like "$($adminAccount.Sid.Value)" } | Remove-CimInstance
+            Write-Log -Object "Hardening" -Message "Removed SID500 Administrator account profile" -Severity Information -LogPath $LogPath
+        }
+
+        # Create New Admin
+        New-LocalUser $adminUsername -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -Description "Local Administrator" -PasswordNeverExpires
+        Add-LocalGroupMember -Group 'Administrators' -Member $adminUsername
+        Remove-LocalGroupMember -Group 'Users' -Member $adminUsername -ErrorAction SilentlyContinue
+        Write-Log -Object "Hardening" -Message "Created new local Administrator account" -Severity Information -LogPath $LogPath
     }
-
-    # Create New Admin
-    New-LocalUser $adminUsername -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -Description "Local Administrator" -PasswordNeverExpires
-    Add-LocalGroupMember -Group 'Administrators' -Member $adminUsername
-    Remove-LocalGroupMember -Group 'Users' -Member $adminUsername -ErrorAction SilentlyContinue
-    Write-Log -Object "Hardening" -Message "Created new local Administrator account" -Severity Information -LogPath $LogPath
 
     # Rename Guest Account
     $guestAccount = Get-LocalUser | Where-Object { $_.SID -like 'S-1-5-*-501' }
@@ -194,23 +204,31 @@ process {
     # Allow ping through windows firewall
     New-NetFirewallRule -DisplayName 'Allow ICMPv4-In' -Direction Inbound -Action Allow -Protocol ICMPv4 -ErrorAction SilentlyContinue
     New-NetFirewallRule -DisplayName 'Allow ICMPv6-In' -Direction Inbound -Action Allow -Protocol ICMPv6 -ErrorAction SilentlyContinue
-    Write-Log -Object "Hardening" -Message "Confgiured Windows Firewall to allow Ping" -Severity Information -LogPath $LogPath
+    Write-Log -Object "Hardening" -Message "Configured Windows Firewall to allow Ping" -Severity Information -LogPath $LogPath
 
     # Disable Windows Powershell V2
     if ($OS -like "*Server*") {
-        Remove-WindowsFeature -Name PowerShell-V2 -ErrorAction SilentlyContinue
+        if ((Get-WindowsFeature -Name PowerShell-V2).Installed -eq $true) {
+            Remove-WindowsFeature -Name PowerShell-V2 -ErrorAction SilentlyContinue
+        }
     }
     else {
-        Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root -ErrorAction SilentlyContinue
+        if ((Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root).State -eq 'Enabled') {
+            Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root -ErrorAction SilentlyContinue
+        }
     }
     Write-Log -Object "Hardening" -Message "Uninstalled PowerShell V2" -Severity Information -LogPath $LogPath
 
     # Enable Telnet Client
     if ($OS -like "*Server*") {
-        Install-WindowsFeature -Name Telnet-Client -ErrorAction SilentlyContinue
+        if ((Get-WindowsFeature -Name Telnet-Client).Installed -eq $false) {
+            Install-WindowsFeature -Name Telnet-Client -ErrorAction SilentlyContinue
+        }
     }
     else {
-        Enable-WindowsOptionalFeature -Online -FeatureName TelnetClient -ErrorAction SilentlyContinue
+        if ((Get-WindowsOptionalFeature -Online -FeatureName TelnetClient).State -eq 'Disabled') {
+            Enable-WindowsOptionalFeature -Online -FeatureName TelnetClient -ErrorAction SilentlyContinue
+        }
     }
     Write-Log -Object "Hardening" -Message "Installed Telnet Client" -Severity Information -LogPath $LogPath
 
@@ -338,7 +356,7 @@ process {
 
     # Disable NetBIOS
     $key = "HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces"
-    Get-ChildItem $key | ForEach-Object { Set-ItemProperty -Path "$key\$($_.pschildname)" -Name NetbiosOptions -Value 2 }
+    Get-ChildItem $key | ForEach-Object { Set-ItemProperty -Path "$key\$($_.PSChildName)" -Name NetbiosOptions -Value 2 }
     Write-Log -Object "Hardening" -Message "Disable NetBIOS" -Severity Information -LogPath $LogPath
 
     # Enable Task Manager Disk Performance Counters
@@ -346,7 +364,9 @@ process {
     Write-Log -Object "Hardening" -Message "Enable Task Manager Disk Performance Counters" -Severity Information -LogPath $LogPath
 
     # Modify SMB defaults
-    Disable-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -NoRestart
+    if ((Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol).State -eq 'Enabled') {
+        Disable-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -NoRestart
+    }
     Write-Log -Object "Hardening" -Message "Disable SMB1" -Severity Information -LogPath $LogPath
 
     # SMB Modifications for performance:
@@ -354,7 +374,7 @@ process {
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DisableLargeMtu' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileInfoCacheEntriesMax' -PropertyType DWord -Value '8000' -ErrorAction SilentlyContinue
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'DirectoryCacheEntriesMax' -PropertyType DWord -Value '1000' -ErrorAction SilentlyContinue
-    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileNotFoundcacheEntriesMax' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
+    New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'FileNotFoundCacheEntriesMax' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters' -Name 'MaxCmds' -PropertyType DWord -Value '8000' -ErrorAction SilentlyContinue
     New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name 'EnableWsd' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
 
@@ -386,7 +406,7 @@ process {
         # Disable the "how to use Windows" contextual popups
         New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableSoftLanding' -PropertyType DWord -Value '1' -ErrorAction SilentlyContinue
 
-        $appsToRemove = @('Clipchamp.Clipcham',
+        $appsToRemove = @('Clipchamp.Clipchamp',
             'Microsoft.3DBuilder',
             'Microsoft.549981C3F5F10',
             'Microsoft.BingFinance',
@@ -504,5 +524,7 @@ process {
 
 end {
     # Restart Computer
-    Restart-Computer -Force
+    if ($restartParam -and $restartPostInstall) {
+        Restart-Computer -Force
+    }
 }
