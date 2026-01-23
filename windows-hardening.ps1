@@ -208,19 +208,27 @@ process {
 
     # Disable Windows Powershell V2
     if ($OS -like "*Server*") {
-        Remove-WindowsFeature -Name PowerShell-V2 -ErrorAction SilentlyContinue
+        if ((Get-WindowsFeature -Name PowerShell-V2).Installed -eq $true) {
+            Remove-WindowsFeature -Name PowerShell-V2 -ErrorAction SilentlyContinue
+        }
     }
     else {
-        Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root -ErrorAction SilentlyContinue
+        if ((Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root).State -eq 'Enabled') {
+            Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root -ErrorAction SilentlyContinue
+        }
     }
     Write-Log -Object "Hardening" -Message "Uninstalled PowerShell V2" -Severity Information -LogPath $LogPath
 
     # Enable Telnet Client
     if ($OS -like "*Server*") {
-        Install-WindowsFeature -Name Telnet-Client -ErrorAction SilentlyContinue
+        if ((Get-WindowsFeature -Name Telnet-Client).Installed -eq $false) {
+            Install-WindowsFeature -Name Telnet-Client -ErrorAction SilentlyContinue
+        }
     }
     else {
-        Enable-WindowsOptionalFeature -Online -FeatureName TelnetClient -ErrorAction SilentlyContinue
+        if ((Get-WindowsOptionalFeature -Online -FeatureName TelnetClient).State -eq 'Disabled') {
+            Enable-WindowsOptionalFeature -Online -FeatureName TelnetClient -ErrorAction SilentlyContinue
+        }
     }
     Write-Log -Object "Hardening" -Message "Installed Telnet Client" -Severity Information -LogPath $LogPath
 
@@ -356,7 +364,9 @@ process {
     Write-Log -Object "Hardening" -Message "Enable Task Manager Disk Performance Counters" -Severity Information -LogPath $LogPath
 
     # Modify SMB defaults
-    Disable-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -NoRestart
+    if ((Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol).State -eq 'Enabled') {
+        Disable-WindowsOptionalFeature -Online -FeatureName 'SMB1Protocol' -NoRestart
+    }
     Write-Log -Object "Hardening" -Message "Disable SMB1" -Severity Information -LogPath $LogPath
 
     # SMB Modifications for performance:
