@@ -196,9 +196,10 @@ process {
     Write-Log -Object "Hardening" -Message "Reregistered performance counters" -Severity Information -LogPath $LogPath
 
     # Set Eventlog Sizes
-    Limit-EventLog -LogName Application -MaximumSize 81920KB -OverflowAction OverwriteAsNeeded
-    Limit-EventLog -LogName Security -MaximumSize 81920KB -OverflowAction OverwriteAsNeeded
-    Limit-EventLog -LogName System -MaximumSize 81920KB -OverflowAction OverwriteAsNeeded
+    Limit-EventLog -LogName Application -MaximumSize 192MB -OverflowAction OverwriteAsNeeded
+    Limit-EventLog -LogName Security -MaximumSize 192MB -OverflowAction OverwriteAsNeeded
+    Limit-EventLog -LogName System -MaximumSize 192MB -OverflowAction OverwriteAsNeeded
+    Restart-Service -Name EventLog -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Set EventLog Size" -Severity Information -LogPath $LogPath
 
     # Allow ping through windows firewall
@@ -395,6 +396,13 @@ process {
     Set-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa' -Name "EveryoneIncludesAnonymous" -Value 0 -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Disable Null Sessions" -Severity Information -LogPath $LogPath
 
+    # Server 2025 disable diagnostic data collection
+    if ($OS -like "*Server 2025*") {
+        New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -ErrorAction SilentlyContinue
+        New-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -PropertyType DWord -Value '0' -ErrorAction SilentlyContinue
+        Write-Log -Object "Hardening" -Message "Disabled Diagnostic Data Collection" -Severity Information -LogPath $LogPath
+    }
+
     # Remove (Almost All) Inbox UWP Apps:
     if ($OS -notlike "*Server*") {
         # Get list of Provisioned Start Screen Apps
@@ -411,6 +419,7 @@ process {
             'Microsoft.549981C3F5F10',
             'Microsoft.BingFinance',
             'Microsoft.BingNews',
+            'Microsoft.BingSearch',
             'Microsoft.BingSports',
             'Microsoft.BingWeather',
             'Microsoft.CommsPhone',
@@ -427,6 +436,7 @@ process {
             'Microsoft.Office.OneNote',
             'Microsoft.Office.Sway',
             'Microsoft.OneConnect',
+            'Microsoft.OutlookForWindows',
             'Microsoft.People',
             'Microsoft.PowerAutomateDesktop',
             'Microsoft.SkypeApp',
@@ -447,7 +457,8 @@ process {
             'Microsoft.XboxSpeechToTextOverlay',
             'Microsoft.YourPhone',
             'Microsoft.ZuneMusic',
-            'Microsoft.ZuneVideo'
+            'Microsoft.ZuneVideo',
+            'MSTeams'
         )
 
         # Remove Windows Store Apps

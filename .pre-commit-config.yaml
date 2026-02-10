@@ -18,11 +18,11 @@ repos:
     -   id: no-commit-to-branch
 
 -   repo: https://gitlab.com/vojko.pribudic.foss/pre-commit-update
-    rev: v0.8.0
+    rev: v0.9.0
     hooks:
     -   id: pre-commit-update
 
 -   repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.12.1
+    rev: v4.13.7
     hooks:
     -   id: commitizen
