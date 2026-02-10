@@ -1,3 +1,9 @@
+## v0.3.0 (2026-02-10)
+
+### Feat
+
+- update event log size and disable diagnostic data collection for Server 2025 (#12)
+
 ## v0.2.0 (2025-08-29)
 
 ### Feat
