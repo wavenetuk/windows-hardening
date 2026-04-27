@@ -1,3 +1,9 @@
+## v0.4.0 (2026-04-27)
+
+### Feat
+
+- disable Privacy Experience and adjust telemetry settings (#13)
+
 ## v0.3.0 (2026-02-10)
 
 ### Feat
