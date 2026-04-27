@@ -396,6 +396,10 @@ process {
     Set-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa' -Name "EveryoneIncludesAnonymous" -Value 0 -ErrorAction SilentlyContinue
     Write-Log -Object "Hardening" -Message "Disable Null Sessions" -Severity Information -LogPath $LogPath
 
+    # Disable Privacy Experience
+    Set-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\OOBE' -Name "DisablePrivacyExperience" -Value 1 -ErrorAction SilentlyContinue
+    Set-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name "AllowTelemetry" -Value 1 -ErrorAction SilentlyContinue
+
     # Server 2025 disable diagnostic data collection
     if ($OS -like "*Server 2025*") {
         New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -ErrorAction SilentlyContinue
